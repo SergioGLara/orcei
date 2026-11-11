@@ -32,7 +32,7 @@ h3{margin:18px 0 4px;font-size:15px;display:flex;justify-content:space-between;a
 .bar{height:8px;background:var(--b);border-radius:4px;margin-top:8px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--g)}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--c);border-top:1px solid var(--b);padding:6px 6px calc(6px + env(safe-area-inset-bottom));gap:4px}
-nav button{flex:1;border:0;background:none;font-size:12px;padding:8px 2px;border-radius:8px}
+nav button{flex:1;border:0;background:none;font-size:11px;padding:8px 0;border-radius:8px}
 nav button.on{color:var(--a);font-weight:600;background:var(--bg)}
 nav .plus{flex:none;width:52px;background:var(--g);color:var(--bg);font-size:24px;line-height:1;border-radius:26px}
 dialog{border:1px solid var(--b);border-radius:16px;background:var(--c);color:var(--t);width:min(92vw,420px);padding:16px}
@@ -49,9 +49,10 @@ input[type=checkbox]{width:20px;height:20px;margin:6px 0 0}
 <main id="v"></main>
 <nav>
 <button data-t="i" onclick="go('i')">Início</button>
-<button data-t="l" onclick="go('l')">Lançamentos</button>
+<button data-t="l" onclick="go('l')">Lançam.</button>
 <button class="plus" onclick="fNovo()" aria-label="Novo lançamento">+</button>
-<button data-t="o" onclick="go('o')">Orçamento</button>
+<button data-t="f" onclick="go('f')">Faturas</button>
+<button data-t="o" onclick="go('o')">Orçam.</button>
 <button data-t="c" onclick="go('c')">Cadastros</button>
 </nav>
 <dialog id="dlg"></dialog>
@@ -61,13 +62,14 @@ input[type=checkbox]{width:20px;height:20px;margin:6px 0 0}
 const CID="20927cea-0ec6-42ff-b6ba-8f0795514cf9";
 /* ======================================================================================= */
 const SC=["Files.ReadWrite.All"],GR="https://graph.microsoft.com/v1.0";
-const K=["pessoas","contas","cartoes","categorias","recorrencias","lancamentos","transferencias","orcamentos"];
+const K=["pessoas","contas","cartoes","categorias","recorrencias","lancamentos","transferencias","orcamentos","faturas"];
 const FR=["mensal","semanal","quinzenal","bimestral","trimestral","semestral","anual"];
 let db=JSON.parse(localStorage.db||"null")||Object.fromEntries(K.map(k=>[k,[]])),
 meta=JSON.parse(localStorage.meta||"{}"),mes=new Date().toISOString().slice(0,7),tab="i",app,acc,busy,tm,msg="";
 const $=s=>document.querySelector(s),uid=()=>crypto.randomUUID(),now=()=>new Date().toISOString(),hoje=()=>now().slice(0,10);
 const R=c=>(c/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+K.forEach(k=>db[k]=db[k]||[]);
 const L=k=>db[k].filter(x=>!x.deleted_at),F1=(k,i)=>db[k].find(x=>x.id===i);
 const dm=s=>s.slice(8)+"/"+s.slice(5,7);
 const sum=(a,t)=>a.filter(l=>l.tipo==t).reduce((s,l)=>s+l.valor,0);
@@ -86,7 +88,7 @@ return new Date(Date.UTC(Y,M,Math.min(d,last))).toISOString().slice(0,10)}
 
 function saldo(c){let s=c.saldo_inicial||0;
 L("lancamentos").forEach(l=>{if(l.conta_id==c.id&&l.pago_em)s+=l.tipo=="receita"?l.valor:-l.valor});
-L("transferencias").forEach(t=>{if(t.efetivada_em){if(t.conta_destino_id==c.id)s+=t.valor;if(t.conta_origem_id==c.id)s-=t.valor}});return s}
+L("transferencias").forEach(t=>{if(t.efetivada_em){if(t.conta_destino_id==c.id)s+=t.valor;if(t.conta_origem_id==c.id)s-=t.valor}});L("faturas").forEach(f=>{if(f.conta_id==c.id&&f.pago_em)s-=f.valor});return s}
 
 /* ---------- telas ---------- */
 function go(t){tab=t;render()}
@@ -94,7 +96,7 @@ function mv(n){const[y,m]=mes.split("-").map(Number);mes=new Date(Date.UTC(y,m-1
 function render(){
 $("#h").innerHTML=`<div class=mes><button class=sm onclick="mv(-1)" aria-label="Mês anterior">‹</button>${new Date(mes+"-02").toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}<button class=sm onclick="mv(1)" aria-label="Próximo mês">›</button></div><div>${CID&&!acc?`<button class="sm pri" onclick="app&&app.loginRedirect({scopes:SC})">Entrar</button> `:""}<button class=sm onclick="fCfg()" aria-label="Configurações">⚙</button></div>`;
 $("#st").textContent=msg||(CID?"":"Modo local: dados só neste aparelho");
-$("#v").innerHTML={i:vI,l:vL,o:vO,c:vC}[tab]();
+$("#v").innerHTML={i:vI,l:vL,o:vO,c:vC,f:vF}[tab]();
 document.querySelectorAll("nav button[data-t]").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
 
 function vI(){const m=ML(),mt=m.filter(l=>l.pago_em),r=sum(m,"receita"),d=sum(m,"despesa");
@@ -102,14 +104,14 @@ const cs=L("contas"),ks=L("cartoes");
 return`<div class=g3><div class=card><small>Receitas</small><b class=rec>${R(r)}</b></div><div class=card><small>Despesas</small><b class=des>${R(d)}</b></div><div class=card><small>Resultado</small><b>${R(r-d)}</b></div></div>
 <small>Previsto + realizado do mês. Já pago/recebido: ${R(sum(mt,"receita")-sum(mt,"despesa"))}</small>
 <h3>Contas</h3>${cs.map(c=>`<div class=row><span>${esc(c.nome)}</span><b>${R(saldo(c))}</b></div>`).join("")||'<p class=m>Nenhuma conta ainda. Vá em Cadastros.</p>'}
-${ks.length?`<h3>Cartões no mês</h3>`+ks.map(k=>`<div class=row><span>${esc(k.nome)}</span><b>${R(m.filter(l=>l.cartao_id==k.id).reduce((s,l)=>s+l.valor,0))}</b></div>`).join(""):""}`}
+${fatAb()}`}
 
 function vL(){const it=[...ML().map(o=>({k:"l",o,d:o.vencimento})),...MT().map(o=>({k:"t",o,d:o.data}))].sort((a,b)=>a.d<b.d?-1:1);
 return it.map(({k,o,d})=>{
 if(k=="t"){const a=F1("contas",o.conta_origem_id),b=F1("contas",o.conta_destino_id);
 return`<div class=row><div class=l><button class="ck ${o.efetivada_em?"on":""}" onclick="tg('t','${o.id}')">✓</button><div onclick="fTr('${o.id}')"><div>${esc(o.descricao||"Transferência")}</div><small>${dm(d)} · ${esc(a?.nome)} → ${esc(b?.nome)} ✎</small></div></div><b>${R(o.valor)}</b></div>`}
-const c=F1("categorias",o.categoria_id),w=F1("contas",o.conta_id)||F1("cartoes",o.cartao_id);
-return`<div class=row><div class=l><button class="ck ${o.pago_em?"on":""}" onclick="tg('l','${o.id}')">✓</button><div onclick="fLanc('${o.tipo}','${o.id}')"><div>${esc(o.descricao)}</div><small>${dm(d)} · ${esc(c?.nome||"Sem categoria")} · ${esc(w?.nome)} ✎</small></div></div><b class="${o.tipo=="receita"?"rec":"des"}">${o.tipo=="receita"?"":"−"}${R(o.valor)}</b></div>`}).join("")||'<p class=m>Nada neste mês. Toque em + para lançar.</p>'}
+const c=F1("categorias",o.categoria_id),w=F1("contas",o.conta_id)||F1("cartoes",o.cartao_id),cd=o.cartao_id&&F1("cartoes",o.cartao_id),fa=cd&&fat(cd,o.vencimento),pg=cd?L("faturas").some(f=>f.cartao_id==cd.id&&f.ref==fa.ref):o.pago_em;
+return`<div class=row><div class=l><button class="ck ${pg?"on":""}" onclick="${cd?`irFat('${o.id}')`:`tg('l','${o.id}')`}">✓</button><div onclick="fLanc('${o.tipo}','${o.id}')"><div>${esc(o.descricao)}</div><small>${dm(d)} · ${esc(c?.nome||"Sem categoria")} · ${esc(w?.nome)}${cd?" · fatura vence "+dm(fa.venc):""} ✎</small></div></div><b class="${o.tipo=="receita"?"rec":"des"}">${o.tipo=="receita"?"":"−"}${R(o.valor)}</b></div>`}).join("")||'<p class=m>Nada neste mês. Toque em + para lançar.</p>'}
 
 function vO(){const cs=L("categorias").filter(c=>c.tipo=="despesa"&&!c.pai_id);
 return cs.map(c=>{const ids=[c.id,...L("categorias").filter(x=>x.pai_id==c.id).map(x=>x.id)];
@@ -122,6 +124,26 @@ const cats=L("categorias"),top=cats.filter(c=>!c.pai_id);
 return`<h3>Contas <button class=sm onclick="fConta()">+ Nova</button></h3>${L("contas").map(c=>row("fConta",c.id,esc(c.nome),c.tipo)).join("")}
 <h3>Cartões <button class=sm onclick="fCartao()">+ Novo</button></h3>${L("cartoes").map(c=>row("fCartao",c.id,esc(c.nome),"fecha dia "+c.dia_fechamento+" · vence dia "+c.dia_vencimento)).join("")}
 <h3>Categorias <button class=sm onclick="fCat()">+ Nova</button></h3>${top.map(c=>row("fCat",c.id,esc(c.nome),c.tipo)+cats.filter(x=>x.pai_id==c.id).map(x=>row("fCat",x.id,"&emsp;↳ "+esc(x.nome),x.tipo)).join("")).join("")}`}
+
+/* ---------- faturas do cartão ---------- */
+/* Compra até o dia do fechamento (inclusive) entra na fatura que fecha naquele mês; depois, na do mês seguinte. */
+function fat(k,d){const[y,m,dia]=d.split("-").map(Number);
+const mk=(Y,M,D)=>{const t=new Date(Date.UTC(Y,M-1,1));Y=t.getUTCFullYear();M=t.getUTCMonth()+1;const u=new Date(Date.UTC(Y,M,0)).getUTCDate();return Y+"-"+String(M).padStart(2,"0")+"-"+String(Math.min(D,u)).padStart(2,"0")};
+const fm=dia<=k.dia_fechamento?m:m+1,fech=mk(y,fm,k.dia_fechamento),venc=mk(y,k.dia_vencimento>k.dia_fechamento?fm:fm+1,k.dia_vencimento);
+return{ref:fech.slice(0,7),fech,venc}}
+const sh=(ref,n)=>{const[y,m]=ref.split("-").map(Number);return new Date(Date.UTC(y,m-1+n,1)).toISOString().slice(0,7)};
+function fatD(k,ref){const itens=L("lancamentos").filter(l=>l.cartao_id==k.id&&fat(k,l.vencimento).ref==ref).sort((a,b)=>a.vencimento<b.vencimento?-1:1),f=fat(k,ref+"-01");
+return{ref,fech:f.fech,venc:f.venc,itens,total:itens.reduce((s,l)=>s+l.valor,0),pg:L("faturas").find(x=>x.cartao_id==k.id&&x.ref==ref)}}
+function fatAb(){const o=[];L("cartoes").forEach(k=>{const r0=fat(k,hoje()).ref;[sh(r0,-1),r0].forEach(ref=>{const d=fatD(k,ref);if(d.total&&!d.pg)o.push({k,d})})});
+return o.length?"<h3>Faturas em aberto</h3>"+o.map(({k,d})=>`<div class=row onclick="irMes('${d.venc.slice(0,7)}')"><div><div>${esc(k.nome)}</div><small>${hoje()>d.fech?"Fechada":"Aberta"} · vence ${dm(d.venc)}</small></div><b>${R(d.total)}</b></div>`).join(""):""}
+function irMes(m){mes=m;go("f")}
+function irFat(id){const l=F1("lancamentos",id);irMes(fat(F1("cartoes",l.cartao_id),l.vencimento).venc.slice(0,7))}
+function vF(){const[y,m]=mes.split("-").map(Number);
+return"<small>Faturas que vencem neste mês</small>"+(L("cartoes").map(k=>{const ref=new Date(Date.UTC(y,m-1-(k.dia_vencimento>k.dia_fechamento?0:1),1)).toISOString().slice(0,7),d=fatD(k,ref),st=d.pg?"Paga em "+dm(d.pg.pago_em):(hoje()>d.fech?"Fechada":"Aberta");
+return`<div class=card><div class=row style="border:0;padding:0;margin:0;background:none"><b>${esc(k.nome)}</b><b>${R(d.total)}</b></div><small>${st} · fecha ${dm(d.fech)} · vence ${dm(d.venc)}</small>${d.itens.map(l=>`<div class=row onclick="fLanc('despesa','${l.id}')"><div><div>${esc(l.descricao)}</div><small>${dm(l.vencimento)} ✎</small></div><b class=des>${R(l.valor)}</b></div>`).join("")||"<p class=m>Sem compras nesta fatura.</p>"}<div class=bt>${d.pg?`<button onclick="desfPag('${d.pg.id}')">Desfazer pagamento</button>`:`<button class=pri onclick="fPag('${k.id}','${ref}')">Pagar fatura</button>`}</div></div>`}).join("")||'<p class=m>Cadastre um cartão (aba Cadastros).</p>')}
+function fPag(kid,ref){const k=F1("cartoes",kid),d=fatD(k,ref),cs=L("contas");if(!cs.length){alert("Cadastre uma conta antes.");return}
+form("Pagar fatura "+esc(k.nome),[{n:"conta_id",l:"Pagar com a conta",o:cs.map(c=>[c.id,c.nome])},{n:"valor",l:"Valor pago (R$)",$:1,r:1},{n:"pago_em",l:"Data do pagamento",t:"date",r:1}],{conta_id:k.conta_pgto_id||cs[0].id,valor:d.total,pago_em:hoje()},o=>upsert("faturas",{id:uid(),cartao_id:kid,ref,conta_id:o.conta_id,valor:o.valor,pago_em:o.pago_em}))}
+function desfPag(i){if(confirm("Desfazer o pagamento desta fatura?"))del("faturas",i)}
 
 function tg(k,i){const t=k=="l"?"lancamentos":"transferencias",f=k=="l"?"pago_em":"efetivada_em";upsert(t,{id:i,[f]:F1(t,i)[f]?null:hoje()})}
 
@@ -141,13 +163,13 @@ function fLanc(tipo,i){const v=i?{...F1("lancamentos",i)}:{vencimento:hoje()};if
 const cs=L("contas"),ks=tipo=="despesa"?L("cartoes"):[];
 if(!cs.length){$("#dlg").close();alert("Cadastre uma conta antes (aba Cadastros).");return}
 v.origem=v.cartao_id?"k:"+v.cartao_id:"c:"+(v.conta_id||cs[0].id);
-const F=[{n:"descricao",l:"Descrição",r:1},{n:"valor",l:"Valor (R$)",$:1,r:1},{n:"vencimento",l:"Vencimento",t:"date",r:1},
+const F=[{n:"descricao",l:"Descrição",r:1},{n:"valor",l:"Valor (R$)",$:1,r:1},{n:"vencimento",l:"Data (da compra, se for no cartão)",t:"date",r:1},
 {n:"origem",l:tipo=="receita"?"Entra na conta":"Sai da conta/cartão",o:[...cs.map(c=>["c:"+c.id,c.nome]),...ks.map(c=>["k:"+c.id,"Cartão "+c.nome])]},
 {n:"categoria_id",l:"Categoria",o:[["","Sem categoria"],...L("categorias").filter(c=>c.tipo==tipo).map(c=>[c.id,nome(c)])]},
-{n:"pago",l:tipo=="receita"?"Já recebido":"Já pago",t:"checkbox"}];
+{n:"pago",l:tipo=="receita"?"Já recebido":"Já pago (não vale p/ cartão)",t:"checkbox"}];
 if(i&&v.recorrencia_id)F.push({n:"ap",l:"Aplicar a",o:[["","Só este lançamento"],["fut","Este e os próximos da série"]]});
 if(!i)F.push({n:"rec",l:"Repetir",o:[["","Não repetir"],...FR.map(f=>[f,f])]},{n:"qtd",l:"Quantas vezes (se repetir)",t:"number"});
-form((i?"Editar ":"Nova ")+tipo,F,v,o=>{const[t,x]=o.origem.split(":"),b={descricao:o.descricao,valor:o.valor,vencimento:o.vencimento,tipo,categoria_id:o.categoria_id,conta_id:t=="c"?x:null,cartao_id:t=="k"?x:null,pessoa_id:meta.eu||null};
+form((i?"Editar ":"Nova ")+tipo,F,v,o=>{const[t,x]=o.origem.split(":");if(t=="k")o.pago=false;const b={descricao:o.descricao,valor:o.valor,vencimento:o.vencimento,tipo,categoria_id:o.categoria_id,conta_id:t=="c"?x:null,cartao_id:t=="k"?x:null,pessoa_id:meta.eu||null};
 if(i){(o.ap=="fut"?serie(v,1):[v]).forEach(x=>upsert("lancamentos",{...b,id:x.id,vencimento:x.id==i?o.vencimento:x.vencimento,pago_em:x.id==i?(o.pago?(v.pago_em||hoje()):null):x.pago_em}));return}
 let n=1,rid=null;if(o.rec){n=o.qtd||12;rid=uid();upsert("recorrencias",{id:rid,frequencia:o.rec,inicio:o.vencimento,qtd_parcelas:n})}
 for(let k=0;k<n;k++)upsert("lancamentos",{...b,id:uid(),recorrencia_id:rid,parcela_num:o.rec?k+1:null,vencimento:add(o.vencimento,o.rec||"mensal",k),pago_em:k==0&&o.pago?hoje():null})},
@@ -155,8 +177,8 @@ i?()=>{const s=v.recorrencia_id&&confirm("Este lançamento se repete.\nOK = excl
 
 const serie=(v,s)=>s?L("lancamentos").filter(x=>x.recorrencia_id==v.recorrencia_id&&x.vencimento>=v.vencimento):[v];
 function emUso(k,i){const n=(a,f)=>L(a).filter(f).length;
-if(k=="contas")return n("lancamentos",x=>x.conta_id==i)+n("transferencias",x=>x.conta_origem_id==i||x.conta_destino_id==i)+n("cartoes",x=>x.conta_pgto_id==i);
-if(k=="cartoes")return n("lancamentos",x=>x.cartao_id==i);
+if(k=="contas")return n("lancamentos",x=>x.conta_id==i)+n("transferencias",x=>x.conta_origem_id==i||x.conta_destino_id==i)+n("cartoes",x=>x.conta_pgto_id==i)+n("faturas",x=>x.conta_id==i);
+if(k=="cartoes")return n("lancamentos",x=>x.cartao_id==i)+n("faturas",x=>x.cartao_id==i);
 return n("lancamentos",x=>x.categoria_id==i)+n("categorias",x=>x.pai_id==i)}
 function delc(k,i){const n=emUso(k,i);if(n){alert("Não dá para excluir: há "+n+" item(ns) usando este cadastro. Edite ou exclua esses itens antes.");return}del(k,i)}
 function fTr(i){const cs=L("contas");if(cs.length<2){$("#dlg").close();alert("Cadastre pelo menos duas contas.");return}
