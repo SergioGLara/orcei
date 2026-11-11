@@ -107,9 +107,9 @@ ${ks.length?`<h3>Cartões no mês</h3>`+ks.map(k=>`<div class=row><span>${esc(k.
 function vL(){const it=[...ML().map(o=>({k:"l",o,d:o.vencimento})),...MT().map(o=>({k:"t",o,d:o.data}))].sort((a,b)=>a.d<b.d?-1:1);
 return it.map(({k,o,d})=>{
 if(k=="t"){const a=F1("contas",o.conta_origem_id),b=F1("contas",o.conta_destino_id);
-return`<div class=row><div class=l><button class="ck ${o.efetivada_em?"on":""}" onclick="tg('t','${o.id}')">✓</button><div onclick="fTr('${o.id}')"><div>${esc(o.descricao||"Transferência")}</div><small>${dm(d)} · ${esc(a?.nome)} → ${esc(b?.nome)}</small></div></div><b>${R(o.valor)}</b></div>`}
+return`<div class=row><div class=l><button class="ck ${o.efetivada_em?"on":""}" onclick="tg('t','${o.id}')">✓</button><div onclick="fTr('${o.id}')"><div>${esc(o.descricao||"Transferência")}</div><small>${dm(d)} · ${esc(a?.nome)} → ${esc(b?.nome)} ✎</small></div></div><b>${R(o.valor)}</b></div>`}
 const c=F1("categorias",o.categoria_id),w=F1("contas",o.conta_id)||F1("cartoes",o.cartao_id);
-return`<div class=row><div class=l><button class="ck ${o.pago_em?"on":""}" onclick="tg('l','${o.id}')">✓</button><div onclick="fLanc('${o.tipo}','${o.id}')"><div>${esc(o.descricao)}</div><small>${dm(d)} · ${esc(c?.nome||"Sem categoria")} · ${esc(w?.nome)}</small></div></div><b class="${o.tipo=="receita"?"rec":"des"}">${o.tipo=="receita"?"":"−"}${R(o.valor)}</b></div>`}).join("")||'<p class=m>Nada neste mês. Toque em + para lançar.</p>'}
+return`<div class=row><div class=l><button class="ck ${o.pago_em?"on":""}" onclick="tg('l','${o.id}')">✓</button><div onclick="fLanc('${o.tipo}','${o.id}')"><div>${esc(o.descricao)}</div><small>${dm(d)} · ${esc(c?.nome||"Sem categoria")} · ${esc(w?.nome)} ✎</small></div></div><b class="${o.tipo=="receita"?"rec":"des"}">${o.tipo=="receita"?"":"−"}${R(o.valor)}</b></div>`}).join("")||'<p class=m>Nada neste mês. Toque em + para lançar.</p>'}
 
 function vO(){const cs=L("categorias").filter(c=>c.tipo=="despesa"&&!c.pai_id);
 return cs.map(c=>{const ids=[c.id,...L("categorias").filter(x=>x.pai_id==c.id).map(x=>x.id)];
@@ -117,7 +117,7 @@ const g=ML().filter(l=>l.tipo=="despesa"&&ids.includes(l.categoria_id)).reduce((
 const o=L("orcamentos").find(x=>x.categoria_id==c.id&&x.mes_ano==mes),p=o&&o.limite?Math.min(100,g/o.limite*100):0;
 return`<div class=card onclick="fOrc('${c.id}')"><div class=row style="border:0;padding:0;margin:0;background:none"><span>${esc(c.nome)}</span><b>${R(g)}${o?" / "+R(o.limite):""}</b></div>${o?`<div class=bar><i style="width:${p}%;${g>o.limite?"background:var(--r)":""}"></i></div>`:"<small>Toque para definir o limite do mês</small>"}</div>`}).join("")||'<p class=m>Cadastre categorias de despesa primeiro (aba Cadastros).</p>'}
 
-function vC(){const row=(f,id,a,b)=>`<div class=row onclick="${f}('${id}')"><span>${a}</span><small>${b||""}</small></div>`;
+function vC(){const row=(f,id,a,b)=>`<div class=row onclick="${f}('${id}')"><span>${a}</span><small>${b||""} ✎</small></div>`;
 const cats=L("categorias"),top=cats.filter(c=>!c.pai_id);
 return`<h3>Contas <button class=sm onclick="fConta()">+ Nova</button></h3>${L("contas").map(c=>row("fConta",c.id,esc(c.nome),c.tipo)).join("")}
 <h3>Cartões <button class=sm onclick="fCartao()">+ Novo</button></h3>${L("cartoes").map(c=>row("fCartao",c.id,esc(c.nome),"fecha dia "+c.dia_fechamento+" · vence dia "+c.dia_vencimento)).join("")}
@@ -137,7 +137,7 @@ d.showModal()}
 const nome=(c,all)=>{const p=c.pai_id&&F1("categorias",c.pai_id);return p?p.nome+" › "+c.nome:c.nome};
 function fNovo(){const d=$("#dlg");d.innerHTML=`<h3 style="margin-top:0">Novo lançamento</h3><div class=bt style="flex-direction:column"><button onclick="fLanc('despesa')">Despesa</button><button onclick="fLanc('receita')">Receita</button><button onclick="fTr()">Transferência entre contas</button><button onclick="$('#dlg').close()">Cancelar</button></div>`;d.showModal()}
 
-function fLanc(tipo,i){const v=i?F1("lancamentos",i):{vencimento:hoje()};if(i)v.pago=!!v.pago_em;
+function fLanc(tipo,i){const v=i?{...F1("lancamentos",i)}:{vencimento:hoje()};if(i)v.pago=!!v.pago_em;
 const cs=L("contas"),ks=tipo=="despesa"?L("cartoes"):[];
 if(!cs.length){$("#dlg").close();alert("Cadastre uma conta antes (aba Cadastros).");return}
 v.origem=v.cartao_id?"k:"+v.cartao_id:"c:"+(v.conta_id||cs[0].id);
@@ -145,15 +145,22 @@ const F=[{n:"descricao",l:"Descrição",r:1},{n:"valor",l:"Valor (R$)",$:1,r:1},
 {n:"origem",l:tipo=="receita"?"Entra na conta":"Sai da conta/cartão",o:[...cs.map(c=>["c:"+c.id,c.nome]),...ks.map(c=>["k:"+c.id,"Cartão "+c.nome])]},
 {n:"categoria_id",l:"Categoria",o:[["","Sem categoria"],...L("categorias").filter(c=>c.tipo==tipo).map(c=>[c.id,nome(c)])]},
 {n:"pago",l:tipo=="receita"?"Já recebido":"Já pago",t:"checkbox"}];
+if(i&&v.recorrencia_id)F.push({n:"ap",l:"Aplicar a",o:[["","Só este lançamento"],["fut","Este e os próximos da série"]]});
 if(!i)F.push({n:"rec",l:"Repetir",o:[["","Não repetir"],...FR.map(f=>[f,f])]},{n:"qtd",l:"Quantas vezes (se repetir)",t:"number"});
 form((i?"Editar ":"Nova ")+tipo,F,v,o=>{const[t,x]=o.origem.split(":"),b={descricao:o.descricao,valor:o.valor,vencimento:o.vencimento,tipo,categoria_id:o.categoria_id,conta_id:t=="c"?x:null,cartao_id:t=="k"?x:null,pessoa_id:meta.eu||null};
-if(i){upsert("lancamentos",{...b,id:i,pago_em:o.pago?(v.pago_em||hoje()):null});return}
+if(i){(o.ap=="fut"?serie(v,1):[v]).forEach(x=>upsert("lancamentos",{...b,id:x.id,vencimento:x.id==i?o.vencimento:x.vencimento,pago_em:x.id==i?(o.pago?(v.pago_em||hoje()):null):x.pago_em}));return}
 let n=1,rid=null;if(o.rec){n=o.qtd||12;rid=uid();upsert("recorrencias",{id:rid,frequencia:o.rec,inicio:o.vencimento,qtd_parcelas:n})}
 for(let k=0;k<n;k++)upsert("lancamentos",{...b,id:uid(),recorrencia_id:rid,parcela_num:o.rec?k+1:null,vencimento:add(o.vencimento,o.rec||"mensal",k),pago_em:k==0&&o.pago?hoje():null})},
-i?()=>del("lancamentos",i):0)}
+i?()=>{const s=v.recorrencia_id&&confirm("Este lançamento se repete.\nOK = excluir também os próximos da série.\nCancelar = excluir só este.");serie(v,s).forEach(x=>del("lancamentos",x.id))}:0)}
 
+const serie=(v,s)=>s?L("lancamentos").filter(x=>x.recorrencia_id==v.recorrencia_id&&x.vencimento>=v.vencimento):[v];
+function emUso(k,i){const n=(a,f)=>L(a).filter(f).length;
+if(k=="contas")return n("lancamentos",x=>x.conta_id==i)+n("transferencias",x=>x.conta_origem_id==i||x.conta_destino_id==i)+n("cartoes",x=>x.conta_pgto_id==i);
+if(k=="cartoes")return n("lancamentos",x=>x.cartao_id==i);
+return n("lancamentos",x=>x.categoria_id==i)+n("categorias",x=>x.pai_id==i)}
+function delc(k,i){const n=emUso(k,i);if(n){alert("Não dá para excluir: há "+n+" item(ns) usando este cadastro. Edite ou exclua esses itens antes.");return}del(k,i)}
 function fTr(i){const cs=L("contas");if(cs.length<2){$("#dlg").close();alert("Cadastre pelo menos duas contas.");return}
-const v=i?F1("transferencias",i):{data:hoje(),conta_origem_id:cs[0].id,conta_destino_id:cs[1].id};if(i)v.ef=!!v.efetivada_em;
+const v=i?{...F1("transferencias",i)}:{data:hoje(),conta_origem_id:cs[0].id,conta_destino_id:cs[1].id};if(i)v.ef=!!v.efetivada_em;
 const op=cs.map(c=>[c.id,c.nome]);
 form(i?"Editar transferência":"Nova transferência",[{n:"descricao",l:"Descrição"},{n:"valor",l:"Valor (R$)",$:1,r:1},{n:"data",l:"Data",t:"date",r:1},{n:"conta_origem_id",l:"De",o:op},{n:"conta_destino_id",l:"Para",o:op},{n:"ef",l:"Já realizada",t:"checkbox"}],v,
 o=>{if(o.conta_origem_id==o.conta_destino_id){alert("Escolha contas diferentes.");return false}
@@ -162,15 +169,15 @@ i?()=>del("transferencias",i):0)}
 
 function fConta(i){const v=i?F1("contas",i):{tipo:"corrente"};
 form(i?"Editar conta":"Nova conta",[{n:"nome",l:"Nome",r:1},{n:"tipo",l:"Tipo",o:["corrente","poupanca","dinheiro","investimento","outra"].map(x=>[x,x])},{n:"saldo_inicial",l:"Saldo inicial (R$)",$:1}],v,
-o=>upsert("contas",{id:i||uid(),...o,ativa:1}),i?()=>del("contas",i):0)}
+o=>upsert("contas",{id:i||uid(),...o,ativa:1}),i?()=>delc("contas",i):0)}
 
 function fCartao(i){const v=i?F1("cartoes",i):{dia_fechamento:1,dia_vencimento:10};
 form(i?"Editar cartão":"Novo cartão",[{n:"nome",l:"Nome",r:1},{n:"limite",l:"Limite (R$)",$:1},{n:"dia_fechamento",l:"Dia do fechamento",t:"number",r:1},{n:"dia_vencimento",l:"Dia do vencimento",t:"number",r:1},{n:"conta_pgto_id",l:"Paga a fatura com",o:[["","—"],...L("contas").map(c=>[c.id,c.nome])]}],v,
-o=>upsert("cartoes",{id:i||uid(),...o,ativo:1}),i?()=>del("cartoes",i):0)}
+o=>upsert("cartoes",{id:i||uid(),...o,ativo:1}),i?()=>delc("cartoes",i):0)}
 
 function fCat(i){const v=i?F1("categorias",i):{tipo:"despesa"};
 form(i?"Editar categoria":"Nova categoria",[{n:"nome",l:"Nome",r:1},{n:"tipo",l:"Tipo",o:[["despesa","Despesa"],["receita","Receita"]]},{n:"pai_id",l:"Subcategoria de",o:[["","— (categoria principal)"],...L("categorias").filter(c=>!c.pai_id&&c.id!=i).map(c=>[c.id,c.nome])]}],v,
-o=>upsert("categorias",{id:i||uid(),...o}),i?()=>del("categorias",i):0)}
+o=>upsert("categorias",{id:i||uid(),...o}),i?()=>delc("categorias",i):0)}
 
 function fOrc(cid){const o=L("orcamentos").find(x=>x.categoria_id==cid&&x.mes_ano==mes);
 form("Limite de "+esc(F1("categorias",cid).nome)+" em "+mes.slice(5)+"/"+mes.slice(0,4),[{n:"limite",l:"Limite do mês (R$)",$:1,r:1}],o||{},
