@@ -104,7 +104,7 @@ function vI(){const m=ML(),mt=m.filter(l=>l.pago_em),r=sum(m,"receita"),d=sum(m,
 const cs=L("contas"),ks=L("cartoes");
 return`<div class=g3><div class=card><small>Receitas</small><b class=rec>${R(r)}</b></div><div class=card><small>Despesas</small><b class=des>${R(d)}</b></div><div class=card><small>Resultado</small><b>${R(r-d)}</b></div></div>
 <small>Previsto + realizado do mês. Já pago/recebido: ${R(sum(mt,"receita")-sum(mt,"despesa"))}</small>
-${gCat()}<h3>Contas</h3>${cs.map(c=>`<div class=row><span>${esc(c.nome)}</span><b>${R(saldo(c))}</b></div>`).join("")||'<p class=m>Nenhuma conta ainda. Vá em Cadastros.</p>'}
+${gFluxo()}${gMes()}${gCat()}<h3>Contas</h3>${cs.map(c=>`<div class=row><span>${esc(c.nome)}</span><b>${R(saldo(c))}</b></div>`).join("")||'<p class=m>Nenhuma conta ainda. Vá em Cadastros.</p>'}
 ${fatAb()}`}
 
 /* gráfico de colunas: despesas do mês por categoria (subcategorias somadas à principal) */
@@ -117,6 +117,39 @@ const W=340,H=150,B=52,T=20,mx=Math.max(...a.map(x=>x.v)),gap=(W-20)/a.length,bw
 const bars=a.map((x,i)=>{const h=Math.max(2,(H-B-T)*x.v/mx),cx=10+gap*i+gap/2,y=H-B-h,o=L("orcamentos").find(z=>z.categoria_id==x.id&&z.mes_ano==mes),over=o&&x.v>o.limite;
 return`<rect x="${cx-bw/2}" y="${y}" width="${bw}" height="${h}" rx="4" fill="${over?"var(--r)":"var(--g)"}"/><text x="${cx}" y="${y-5}" text-anchor="middle" font-size="10" fill="currentColor">${kc(x.v)}</text><text transform="translate(${cx},${H-B+12}) rotate(-40)" text-anchor="end" font-size="10" fill="currentColor">${esc(x.n.length>11?x.n.slice(0,10)+"…":x.n)}</text>`}).join("");
 return`<h3>Gastos por categoria</h3><div class=card><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Gráfico de colunas dos gastos por categoria no mês"><line x1="10" x2="${W-10}" y1="${H-B}" y2="${H-B}" stroke="var(--b)"/>${bars}</svg><small>Despesas do mês em R$, somando subcategorias. Vermelho: acima do limite do orçamento.</small></div>`}
+
+/* ---------- gráficos: receitas x despesas por mês e saldo dia a dia ---------- */
+const kn=v=>(v<0?"−":"")+kc(Math.abs(v));
+function irM(m){mes=m;render()}
+function gMes(){const d=[];for(let i=11;i>=0;i--){const k=sh(mes,-i),a=L("lancamentos").filter(l=>l.vencimento.startsWith(k));d.push({k,r:sum(a,"receita"),d:sum(a,"despesa")})}
+if(d.every(x=>!x.r&&!x.d))return"";
+const mx=Math.max(1,...d.flatMap(x=>[x.r,x.d])),W=340,H=150,LM=32,T=14,BM=22,pw=W-LM-6,ph=H-T-BM,g=pw/12,bw=Math.min(11,(g-4)/2);
+const bars=d.map((x,i)=>{const cx=LM+g*i+g/2,hr=ph*x.r/mx,hd=ph*x.d/mx;
+return`${x.k==mes?`<rect x="${cx-g/2}" y="${T}" width="${g}" height="${ph}" fill="currentColor" fill-opacity=".09"/>`:""}<g onclick="irM('${x.k}')" style="cursor:pointer"><rect x="${cx-g/2}" y="${T}" width="${g}" height="${ph+BM}" fill="transparent"/><rect x="${cx-bw-1}" y="${T+ph-hr}" width="${bw}" height="${hr}" rx="2" fill="var(--g)"><title>${x.k.slice(5)}/${x.k.slice(0,4)} · receitas ${R(x.r)}</title></rect><rect x="${cx+1}" y="${T+ph-hd}" width="${bw}" height="${hd}" rx="2" fill="var(--r)"><title>${x.k.slice(5)}/${x.k.slice(0,4)} · despesas ${R(x.d)}</title></rect><text x="${cx}" y="${H-7}" text-anchor="middle" font-size="9" fill="currentColor">${x.k.slice(5)}/${x.k.slice(2,4)}</text></g>`}).join("");
+return`<h3>Receitas x despesas por mês</h3><div class=card><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Receitas e despesas dos últimos 12 meses"><text x="${LM-4}" y="${T+3}" text-anchor="end" font-size="9" fill="currentColor">${kc(mx)}</text><text x="${LM-4}" y="${T+ph+3}" text-anchor="end" font-size="9" fill="currentColor">0</text><line x1="${LM}" x2="${W-6}" y1="${T+ph}" y2="${T+ph}" stroke="var(--b)"/>${bars}</svg><small><span class=rec>■</span> Receitas &nbsp;<span class=des>■</span> Despesas · 12 meses até o mês escolhido. Toque num mês para selecioná-lo.</small></div>`}
+
+/* movimentos de caixa: contas bancárias (sem investimentos) + faturas pagas no vencimento; atrasados contam a partir de hoje */
+function mov(){const cx=L("contas").filter(c=>c.tipo!="investimento"),ids=new Set(cx.map(c=>c.id)),h=hoje(),o=[],dt=(p,g)=>g||(p<h?h:p);
+L("lancamentos").forEach(l=>{if(l.conta_id&&ids.has(l.conta_id))o.push({d:dt(l.vencimento,l.pago_em),v:l.tipo=="receita"?l.valor:-l.valor})});
+L("cartoes").forEach(k=>{[...new Set(L("lancamentos").filter(l=>l.cartao_id==k.id).map(l=>fat(k,l.vencimento).ref))].forEach(ref=>{const f=fatD(k,ref);
+if(f.pg){if(ids.has(f.pg.conta_id))o.push({d:f.pg.pago_em,v:-f.pg.valor})}else o.push({d:dt(f.venc,null),v:-f.total})})});
+return{o,ini:cx.reduce((s,c)=>s+(c.saldo_inicial||0),0)}}
+function gFluxo(){if(!L("contas").length)return"";
+const{o,ini}=mov(),[y,m]=mes.split("-").map(Number),n=new Date(Date.UTC(y,m,0)).getUTCDate(),pd=i=>mes+"-"+String(i).padStart(2,"0");
+let b=ini+o.filter(x=>x.d<pd(1)).reduce((s,x)=>s+x.v,0);const ds=[];
+for(let i=1;i<=n;i++){b+=o.filter(x=>x.d==pd(i)).reduce((s,x)=>s+x.v,0);ds.push(b)}
+const mn=Math.min(...ds),mx=Math.max(...ds),lo=Math.min(0,mn),hi=Math.max(0,mx),sp=(hi-lo)||1;
+const W=340,H=150,LM=34,T=14,BM=22,pw=W-LM-8,ph=H-T-BM,X=i=>LM+pw*i/(n-1),Y=v=>T+ph*(hi-v)/sp,zy=Y(0);
+const pl=ds.map((v,i)=>X(i).toFixed(1)+","+Y(v).toFixed(1)),ar="M"+X(0).toFixed(1)+","+zy.toFixed(1)+" L"+pl.join(" L")+" L"+X(n-1).toFixed(1)+","+zy.toFixed(1)+"Z",po=pl.join(" ");
+const neg=ds.findIndex(v=>v<0),im=ds.indexOf(mn),hj=mes==hoje().slice(0,7)?+hoje().slice(8)-1:-1,tx=(x,y,t,a)=>`<text x="${x}" y="${y}" text-anchor="${a}" font-size="9" fill="currentColor">${t}</text>`;
+const xl=[1,5,10,15,20,25,n].map(i=>tx(X(i-1).toFixed(1),H-7,i,"middle")).join("");
+return`<h3>Saldo dia a dia (projeção)</h3><div class=card><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Saldo projetado em caixa para cada dia do mês"><defs><clipPath id="cpA"><rect x="0" y="0" width="${W}" height="${zy.toFixed(1)}"/></clipPath><clipPath id="cpB"><rect x="0" y="${zy.toFixed(1)}" width="${W}" height="${(H-zy).toFixed(1)}"/></clipPath></defs>
+<line x1="${LM}" x2="${W-8}" y1="${zy.toFixed(1)}" y2="${zy.toFixed(1)}" stroke="var(--m)" stroke-dasharray="3 3"/>
+<path d="${ar}" fill="var(--g)" fill-opacity=".22" clip-path="url(#cpA)"/><path d="${ar}" fill="var(--r)" fill-opacity=".3" clip-path="url(#cpB)"/>
+<polyline points="${po}" fill="none" stroke="var(--g)" stroke-width="2" stroke-linejoin="round" clip-path="url(#cpA)"/><polyline points="${po}" fill="none" stroke="var(--r)" stroke-width="2" stroke-linejoin="round" clip-path="url(#cpB)"/>
+${hj>=0?`<line x1="${X(hj).toFixed(1)}" x2="${X(hj).toFixed(1)}" y1="${T}" y2="${H-BM}" stroke="currentColor" stroke-opacity=".35" stroke-dasharray="2 3"/>${tx(X(hj).toFixed(1),T-3,"hoje","middle")}`:""}
+${hi>0?tx(LM-4,T+3,kn(hi),"end"):""}${tx(LM-4,(zy+3).toFixed(1),"0","end")}${lo<0?tx(LM-4,H-BM,kn(lo),"end"):""}${xl}</svg>
+<small>${neg>=0?`<b class=des>Atenção: saldo negativo a partir de ${dm(pd(neg+1))}.</b> `:"Saldo positivo o mês todo. "}Menor saldo: ${R(mn)} em ${dm(pd(im+1))}. Fim do mês: ${R(ds[n-1])}.</small><br><small>Soma as contas bancárias (sem investimentos): receitas e despesas previstas ou pagas, mais as faturas de cartão no vencimento. O que está atrasado conta a partir de hoje.</small></div>`}
 
 function vL(){const it=[...ML().map(o=>({k:"l",o,d:o.vencimento})),...MT().map(o=>({k:"t",o,d:o.data}))].sort((a,b)=>a.d<b.d?-1:1);
 return it.map(({k,o,d})=>{
